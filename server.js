@@ -7,7 +7,7 @@ require('dotenv').config();
 // Crear la aplicación Express
 const app = express();
 // Usar puerto de variable de entorno (para producción) o 3000 por defecto
-const puerto = process.env.PORT || 3000;
+const puerto = process.env.PORT || 8080;
 
 // Configuración de la base de datos PostgreSQL
 // Usar DATABASE_URL si está disponible (para servicios en la nube)
