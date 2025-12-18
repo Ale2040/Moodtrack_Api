@@ -59,10 +59,26 @@ app.use(cors({
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  exposedHeaders: ['Content-Type', 'Authorization'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
+
+// Manejar peticiones OPTIONS (preflight) explícitamente
+app.options('*', cors());
 app.use(express.json());
+
+// RUTA DE HEALTH CHECK - Para que Railway detecte que el servidor está vivo
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    service: 'Moodtrack_Api'
+  });
+});
 
 // RUTA PRINCIPAL - Para probar que funciona
 app.get('/', (req, res) => {
@@ -1497,10 +1513,53 @@ app.listen(puerto, '0.0.0.0', () => {
 
   // Probar conexión a la base de datos
   probarConexion();
+  
+  console.log('✅ Servidor listo para recibir peticiones');
+});
+
+// MANEJO DE ERRORES GLOBAL - Debe ir DESPUÉS de todas las rutas
+// Manejo de rutas no encontradas
+app.use((req, res) => {
+  res.status(404).json({
+    error: 'Ruta no encontrada',
+    path: req.path,
+    method: req.method
+  });
+});
+
+// Manejo de errores no capturados en rutas
+app.use((err, req, res, next) => {
+  console.error('❌ Error en ruta:', err);
+  res.status(err.status || 500).json({
+    error: 'Error interno del servidor',
+    mensaje: process.env.NODE_ENV === 'production' 
+      ? 'Error en el servidor' 
+      : err.message
+  });
+});
+
+// Manejo de errores no capturados del proceso
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection:', reason);
+  // NO terminar el proceso, solo loguear
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
+  // NO terminar el proceso, solo loguear
+  // En producción, podrías querer terminar, pero en Railway es mejor mantenerlo vivo
 });
 
 // MANEJO DE CIERRE 
 process.on('SIGINT', async () => {
+  console.log('🛑 Recibida señal SIGINT, cerrando servidor...');
+  await baseDatos.end();
+  console.log('Conexiones cerradas');
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  console.log('🛑 Recibida señal SIGTERM, cerrando servidor...');
   await baseDatos.end();
   console.log('Conexiones cerradas');
   process.exit(0);
