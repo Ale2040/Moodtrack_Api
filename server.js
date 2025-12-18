@@ -64,6 +64,16 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// RUTA DE HEALTH CHECK - Para que Railway detecte que el servidor está vivo
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    service: 'Moodtrack_Api'
+  });
+});
+
 // RUTA PRINCIPAL - Para probar que funciona
 app.get('/', (req, res) => {
   res.json({ 
