@@ -1481,6 +1481,40 @@ async function probarConexion() {
   }
 }
 
+// MANEJO DE ERRORES GLOBAL - Debe ir ANTES de app.listen()
+// Manejo de rutas no encontradas
+app.use((req, res) => {
+  console.log(`⚠️ Ruta no encontrada: ${req.method} ${req.path}`);
+  res.status(404).json({
+    error: 'Ruta no encontrada',
+    path: req.path,
+    method: req.method
+  });
+});
+
+// Manejo de errores no capturados
+app.use((err, req, res, next) => {
+  console.error('❌ Error no manejado:', err);
+  console.error('Stack:', err.stack);
+  res.status(err.status || 500).json({
+    error: 'Error interno del servidor',
+    mensaje: process.env.NODE_ENV === 'production' 
+      ? 'Error en el servidor' 
+      : err.message,
+    path: req.path
+  });
+});
+
+// Manejo de errores no capturados del proceso
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
+  console.error('Stack:', error.stack);
+});
+
 // INICIAR EL SERVIDOR
 // Escuchar en 0.0.0.0 para permitir conexiones desde cualquier IP
 app.listen(puerto, '0.0.0.0', () => {
