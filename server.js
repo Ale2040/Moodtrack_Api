@@ -7,7 +7,7 @@ require('dotenv').config();
 // Crear la aplicación Express
 const app = express();
 // Usar puerto de variable de entorno (para producción) o 3000 por defecto
-const puerto = process.env.PORT || 8080;
+const puerto = process.env.PORT || 3000;
 
 // Configuración de la base de datos PostgreSQL
 // Usar DATABASE_URL si está disponible (para servicios en la nube)
@@ -63,16 +63,6 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 app.use(express.json());
-
-// RUTA DE HEALTH CHECK - Para que Railway detecte que el servidor está vivo
-app.get('/health', (req, res) => {
-  res.status(200).json({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    service: 'Moodtrack_Api'
-  });
-});
 
 // RUTA PRINCIPAL - Para probar que funciona
 app.get('/', (req, res) => {
@@ -1490,40 +1480,6 @@ async function probarConexion() {
     console.log('Verifica que PostgreSQL esté ejecutándose y que las credenciales sean correctas');
   }
 }
-
-// MANEJO DE ERRORES GLOBAL - Debe ir ANTES de app.listen()
-// Manejo de rutas no encontradas
-app.use((req, res) => {
-  console.log(`⚠️ Ruta no encontrada: ${req.method} ${req.path}`);
-  res.status(404).json({
-    error: 'Ruta no encontrada',
-    path: req.path,
-    method: req.method
-  });
-});
-
-// Manejo de errores no capturados
-app.use((err, req, res, next) => {
-  console.error('❌ Error no manejado:', err);
-  console.error('Stack:', err.stack);
-  res.status(err.status || 500).json({
-    error: 'Error interno del servidor',
-    mensaje: process.env.NODE_ENV === 'production' 
-      ? 'Error en el servidor' 
-      : err.message,
-    path: req.path
-  });
-});
-
-// Manejo de errores no capturados del proceso
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
-});
-
-process.on('uncaughtException', (error) => {
-  console.error('❌ Uncaught Exception:', error);
-  console.error('Stack:', error.stack);
-});
 
 // INICIAR EL SERVIDOR
 // Escuchar en 0.0.0.0 para permitir conexiones desde cualquier IP
