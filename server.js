@@ -6,79 +6,29 @@ require('dotenv').config();
 
 // Crear la aplicación Express
 const app = express();
-// Usar puerto de variable de entorno (para producción) o 3000 por defecto
 const puerto = process.env.PORT || 3000;
 
 // Configuración de la base de datos PostgreSQL
-// Usar DATABASE_URL si está disponible (para servicios en la nube)
-// Si no, usar configuración local
-let baseDatos;
-if (process.env.DATABASE_URL) {
-  // Para producción (Railway, Render, Heroku, etc.)
-  baseDatos = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: process.env.DATABASE_URL.includes('localhost') ? false : {
-      rejectUnauthorized: false
-    }
-  });
-} else {
-  // Para desarrollo local
-  baseDatos = new Pool({
-    user: process.env.DB_USER || 'postgres',
-    host: process.env.DB_HOST || 'localhost',
-    database: process.env.DB_NAME || 'postgres',
-    password: process.env.DB_PASSWORD || 'admin123',
-    port: parseInt(process.env.DB_PORT || '5432'),
-  });
-}
+const baseDatos = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false,
+  },
+});
 
 // Configurar middlewares
-// CORS: Permitir todos los orígenes en desarrollo, configurar en producción
-const allowedOrigins = process.env.ALLOWED_ORIGINS 
-  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
-  : ['*']; // Permitir todos en desarrollo
-
 app.use(cors({
-  origin: function (origin, callback) {
-    // Permitir peticiones sin origen (apps móviles, Postman, etc.)
-    if (!origin) {
-      return callback(null, true);
-    }
-    
-    // Si está configurado para permitir todos
-    if (allowedOrigins.includes('*')) {
-      return callback(null, true);
-    }
-    
-    // Verificar si el origen está en la lista permitida
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      console.log('⚠️ CORS bloqueado para origen:', origin);
-      callback(new Error('No permitido por CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
-  exposedHeaders: ['Content-Type', 'Authorization'],
-  preflightContinue: false,
-  optionsSuccessStatus: 204
+  origin: [
+    'https://moodtrack-prueba-cumr.vercel.app',
+    'http://localhost:3000',
+    'http://localhost:5173'
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
-// Manejar peticiones OPTIONS (preflight) explícitamente
 app.options('*', cors());
 app.use(express.json());
-
-// RUTA DE HEALTH CHECK - Para que Railway detecte que el servidor está vivo
-app.get('/health', (req, res) => {
-  res.status(200).json({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    service: 'Moodtrack_Api'
-  });
-});
 
 // RUTA PRINCIPAL - Para probar que funciona
 app.get('/', (req, res) => {
@@ -1498,68 +1448,16 @@ async function probarConexion() {
 }
 
 // INICIAR EL SERVIDOR
-// Escuchar en 0.0.0.0 para permitir conexiones desde cualquier IP
-app.listen(puerto, '0.0.0.0', () => {
-  console.log('═══════════════════════════════════');
-  console.log('🚀 Servidor iniciado');
-  console.log(`📍 Puerto: ${puerto}`);
-  console.log(`🌐 Modo: ${process.env.NODE_ENV || 'desarrollo'}`);
-  if (process.env.DATABASE_URL) {
-    console.log('☁️  Base de datos: Nube (DATABASE_URL)');
-  } else {
-    console.log('💻 Base de datos: Local');
-  }
-  console.log('═══════════════════════════════════');
+app.listen(puerto, () => {
+  console.log('inicio');
+  console.log(`Servidor iniciado en puerto ${puerto}`);
 
   // Probar conexión a la base de datos
   probarConexion();
-  
-  console.log('✅ Servidor listo para recibir peticiones');
-});
-
-// MANEJO DE ERRORES GLOBAL - Debe ir DESPUÉS de todas las rutas
-// Manejo de rutas no encontradas
-app.use((req, res) => {
-  res.status(404).json({
-    error: 'Ruta no encontrada',
-    path: req.path,
-    method: req.method
-  });
-});
-
-// Manejo de errores no capturados en rutas
-app.use((err, req, res, next) => {
-  console.error('❌ Error en ruta:', err);
-  res.status(err.status || 500).json({
-    error: 'Error interno del servidor',
-    mensaje: process.env.NODE_ENV === 'production' 
-      ? 'Error en el servidor' 
-      : err.message
-  });
-});
-
-// Manejo de errores no capturados del proceso
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ Unhandled Rejection:', reason);
-  // NO terminar el proceso, solo loguear
-});
-
-process.on('uncaughtException', (error) => {
-  console.error('❌ Uncaught Exception:', error);
-  // NO terminar el proceso, solo loguear
-  // En producción, podrías querer terminar, pero en Railway es mejor mantenerlo vivo
 });
 
 // MANEJO DE CIERRE 
 process.on('SIGINT', async () => {
-  console.log('🛑 Recibida señal SIGINT, cerrando servidor...');
-  await baseDatos.end();
-  console.log('Conexiones cerradas');
-  process.exit(0);
-});
-
-process.on('SIGTERM', async () => {
-  console.log('🛑 Recibida señal SIGTERM, cerrando servidor...');
   await baseDatos.end();
   console.log('Conexiones cerradas');
   process.exit(0);
