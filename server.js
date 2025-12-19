@@ -359,7 +359,7 @@ app.post('/api/estados-animo', async (req, res) => {
     // Esto asegura que se guarde en la hora local correcta
     const resultado = await baseDatos.query(`
       INSERT INTO estados (id_usuario, estado, comentario, fecha_creacion) 
-      VALUES ($1, $2, $3, (NOW() AT TIME ZONE 'UTC' AT TIME ZONE 'America/Argentina/Buenos_Aires')) 
+      VALUES ($1, $2, $3, (NOW() AT TIME ZONE 'America/Argentina/Buenos_Aires')::timestamp)
       RETURNING id, id_usuario, estado, comentario, fecha_creacion
     `, [id_usuario, estado, comentario]);
     
