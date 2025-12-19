@@ -355,26 +355,27 @@ app.post('/api/estados-animo', async (req, res) => {
   const { id_usuario, estado, comentario } = req.body;
   
   try {
-    // Obtener fecha y hora actuales
+    // Obtener fecha y hora actuales explícitamente
     const ahora = new Date();
-    const fechaCreacion = ahora.toISOString().split('T')[0]; // YYYY-MM-DD
-    const horaCreacion = ahora.toTimeString().split(' ')[0].substring(0, 5); // HH:mm
+    const timestamp = ahora.toISOString(); // Formato: 2025-12-18T14:30:00.000Z
     
-    console.log('Fecha creación:', fechaCreacion);
-    console.log('Hora creación:', horaCreacion);
+    console.log('Timestamp a guardar:', timestamp);
     
+    // Usar NOW() o CURRENT_TIMESTAMP explícitamente con casting
     const resultado = await baseDatos.query(`
-      INSERT INTO estados (id_usuario, estado, comentario, fecha_creacion, hora_creacion) 
-      VALUES ($1, $2, $3, $4::DATE, $5::TIME) 
-      RETURNING *
-    `, [id_usuario, estado, comentario, fechaCreacion, horaCreacion]);
+      INSERT INTO estados (id_usuario, estado, comentario, fecha_creacion) 
+      VALUES ($1, $2, $3, NOW()) 
+      RETURNING id, id_usuario, estado, comentario, fecha_creacion
+    `, [id_usuario, estado, comentario]);
     
-    console.log('Estado de ánimo guardado:', resultado.rows[0].id);
-    console.log('Hora de creación guardada:', resultado.rows[0].hora_creacion);
+    const estadoGuardado = resultado.rows[0];
+    console.log('Estado de ánimo guardado:', estadoGuardado.id);
+    console.log('Fecha y hora de creación guardada:', estadoGuardado.fecha_creacion);
+    console.log('Tipo de fecha_creacion:', typeof estadoGuardado.fecha_creacion);
     
     res.status(201).json({
       success: true,
-      data: resultado.rows[0]
+      data: estadoGuardado
     });
     
   } catch (error) {
