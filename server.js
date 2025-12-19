@@ -18,13 +18,30 @@ const baseDatos = new Pool({
 
 // Configurar middlewares
 app.use(cors({
-  origin: [
-    'https://moodtrack-prueba-cumr.vercel.app',
-    'http://localhost:3000',
-    'http://localhost:5173'
-  ],
+  origin: function (origin, callback) {
+    // Permitir peticiones sin origen (apps móviles Flutter, Postman, etc.)
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    // Lista de orígenes permitidos
+    const allowedOrigins = [
+      'https://moodtrack-prueba-cumr.vercel.app',
+      'http://localhost:3000',
+      'http://localhost:5173'
+    ];
+    
+    // Verificar si el origen está en la lista permitida
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      // Permitir también si viene de una app móvil (no tiene origin estándar)
+      callback(null, true);
+    }
+  },
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
 }));
 
 app.options('*', cors());
@@ -775,17 +792,37 @@ app.get('/api/recordatorios/usuario/:usuarioId', async (req, res) => {
     console.log(`Encontrados ${resultado.rows.length} recordatorios`);
     
     // Convertir formato para compatibilidad
-    const recordatorios = resultado.rows.map(rec => ({
-      id: rec.id,
-      titulo: rec.titulo,
-      descripcion: rec.descripcion || '',
-      hora: rec.hora || '00:00',
-      dias_semana: rec.dias_semana || null,
-      fecha_recordatorio: rec.fecha_recordatorio ? new Date(rec.fecha_recordatorio).toISOString() : null,
-      esta_activo: rec.esta_activo !== false, // true por defecto
-      fecha_creacion: rec.fecha_creacion ? new Date(rec.fecha_creacion).toISOString() : new Date().toISOString(),
-      id_usuario: rec.id_usuario
-    }));
+    const recordatorios = resultado.rows.map(rec => {
+      // Asegurar que la hora se formatee correctamente
+      let horaFormateada = '00:00';
+      if (rec.hora) {
+        // Si viene como string, usarlo directamente
+        if (typeof rec.hora === 'string') {
+          horaFormateada = rec.hora.substring(0, 5); // Tomar solo HH:mm
+        } else if (rec.hora instanceof Date) {
+          // Si viene como Date, extraer hora y minutos
+          const horas = rec.hora.getHours().toString().padStart(2, '0');
+          const minutos = rec.hora.getMinutes().toString().padStart(2, '0');
+          horaFormateada = `${horas}:${minutos}`;
+        } else {
+          // Intentar convertir a string y tomar los primeros 5 caracteres
+          const horaStr = String(rec.hora);
+          horaFormateada = horaStr.length >= 5 ? horaStr.substring(0, 5) : horaStr;
+        }
+      }
+      
+      return {
+        id: rec.id,
+        titulo: rec.titulo,
+        descripcion: rec.descripcion || '',
+        hora: horaFormateada,
+        dias_semana: rec.dias_semana || null,
+        fecha_recordatorio: rec.fecha_recordatorio ? new Date(rec.fecha_recordatorio).toISOString() : null,
+        esta_activo: rec.esta_activo !== false, // true por defecto
+        fecha_creacion: rec.fecha_creacion ? new Date(rec.fecha_creacion).toISOString() : new Date().toISOString(),
+        id_usuario: rec.id_usuario
+      };
+    });
     
     res.json(recordatorios);
     
@@ -865,7 +902,8 @@ app.post('/api/recordatorios', async (req, res) => {
     
     console.log('Insertando recordatorio:');
     console.log('  - titulo:', titulo);
-    console.log('  - hora:', horaFormateada);
+    console.log('  - hora recibida:', hora);
+    console.log('  - hora formateada:', horaFormateada);
     console.log('  - dias_semana:', diasFormateados);
     console.log('  - fecha_recordatorio:', fechaRecordatorioFormateada);
     console.log('  - id_usuario:', idUsuarioFinal);
@@ -881,7 +919,7 @@ app.post('/api/recordatorios', async (req, res) => {
         fecha_creacion, 
         id_usuario
       ) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+      VALUES ($1, $2, $3::TIME, $4, $5, $6, $7, $8) 
       RETURNING codigo, titulo, descripcion, hora, dias_semana, fecha_recordatorio, esta_activo, fecha_creacion, id_usuario
     `, [
       titulo,
@@ -901,7 +939,7 @@ app.post('/api/recordatorios', async (req, res) => {
       id: nuevoRecordatorio.codigo,
       titulo: nuevoRecordatorio.titulo,
       descripcion: nuevoRecordatorio.descripcion || '',
-      hora: nuevoRecordatorio.hora || '00:00',
+      hora: nuevoRecordatorio.hora ? (typeof nuevoRecordatorio.hora === 'string' ? nuevoRecordatorio.hora : String(nuevoRecordatorio.hora).substring(0, 5)) : '00:00',
       dias_semana: nuevoRecordatorio.dias_semana || null,
       fecha_recordatorio: nuevoRecordatorio.fecha_recordatorio ? new Date(nuevoRecordatorio.fecha_recordatorio).toISOString() : null,
       esta_activo: nuevoRecordatorio.esta_activo !== false,
@@ -1000,23 +1038,29 @@ app.delete('/api/recordatorios/:id', async (req, res) => {
    // ==================== RELACIÓN PSICÓLOGO - PACIENTE ====================
    app.get('/api/Registrarpaciente', async (req, res) => {
      try {
+       console.log('Obteniendo relaciones psicólogo-paciente');
+       
        const resultado = await baseDatos.query(`
          SELECT 
            pp.psicologo,
            pp.paciente,
            u.usuario AS paciente_usuario
          FROM usuarios_por_psicologo pp
-         LEFT JOIN usuarios u ON u.id = pp.paciente
+         LEFT JOIN usuarios u ON u.id::TEXT = pp.paciente
          ORDER BY pp.psicologo, pp.paciente
        `);
 
-       res.json({
-         success: true,
-         data: resultado.rows,
-       });
+       console.log(`Encontradas ${resultado.rows.length} relaciones`);
+       
+       // Devolver directamente la lista para compatibilidad con Flutter
+       res.json(resultado.rows);
      } catch (error) {
        console.error('Error al obtener relaciones:', error.message);
-       res.status(500).json({ error: 'No se pudieron obtener las relaciones' });
+       console.error('Stack:', error.stack);
+       res.status(500).json({ 
+         error: 'No se pudieron obtener las relaciones',
+         detalle: error.message 
+       });
      }
    });
 
@@ -1448,9 +1492,13 @@ async function probarConexion() {
 }
 
 // INICIAR EL SERVIDOR
-app.listen(puerto, () => {
-  console.log('inicio');
-  console.log(`Servidor iniciado en puerto ${puerto}`);
+// Escuchar en 0.0.0.0 para permitir conexiones desde cualquier IP (necesario en Railway)
+app.listen(puerto, '0.0.0.0', () => {
+  console.log('═══════════════════════════════════');
+  console.log('🚀 Servidor iniciado');
+  console.log(`📍 Puerto: ${puerto}`);
+  console.log(`🌐 Modo: ${process.env.NODE_ENV || 'desarrollo'}`);
+  console.log('═══════════════════════════════════');
 
   // Probar conexión a la base de datos
   probarConexion();
