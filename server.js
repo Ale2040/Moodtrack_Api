@@ -355,23 +355,17 @@ app.post('/api/estados-animo', async (req, res) => {
   const { id_usuario, estado, comentario } = req.body;
   
   try {
-    // Obtener fecha y hora actuales explícitamente
-    const ahora = new Date();
-    const timestamp = ahora.toISOString(); // Formato: 2025-12-18T14:30:00.000Z
-    
-    console.log('Timestamp a guardar:', timestamp);
-    
-    // Usar NOW() o CURRENT_TIMESTAMP explícitamente con casting
+    // Usar zona horaria UTC-3 (America/Argentina/Buenos_Aires, America/Santiago, etc.)
+    // Esto asegura que se guarde en la hora local correcta
     const resultado = await baseDatos.query(`
       INSERT INTO estados (id_usuario, estado, comentario, fecha_creacion) 
-      VALUES ($1, $2, $3, NOW()) 
+      VALUES ($1, $2, $3, (NOW() AT TIME ZONE 'UTC' AT TIME ZONE 'America/Argentina/Buenos_Aires')) 
       RETURNING id, id_usuario, estado, comentario, fecha_creacion
     `, [id_usuario, estado, comentario]);
     
     const estadoGuardado = resultado.rows[0];
     console.log('Estado de ánimo guardado:', estadoGuardado.id);
-    console.log('Fecha y hora de creación guardada:', estadoGuardado.fecha_creacion);
-    console.log('Tipo de fecha_creacion:', typeof estadoGuardado.fecha_creacion);
+    console.log('Fecha y hora de creación guardada (desde DB):', estadoGuardado.fecha_creacion);
     
     res.status(201).json({
       success: true,
