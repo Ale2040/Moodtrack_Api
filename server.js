@@ -1046,7 +1046,7 @@ app.delete('/api/recordatorios/:id', async (req, res) => {
            pp.paciente,
            u.usuario AS paciente_usuario
          FROM usuarios_por_psicologo pp
-         LEFT JOIN usuarios u ON u.id::TEXT = pp.paciente
+         LEFT JOIN usuarios u ON u.id = pp.paciente
          ORDER BY pp.psicologo, pp.paciente
        `);
 
@@ -1116,10 +1116,10 @@ app.delete('/api/recordatorios/:id', async (req, res) => {
       }
 
       // Evitar duplicados
-      // Las columnas psicologo y paciente son VARCHAR, convertir a texto explícitamente
+      // Las columnas psicologo y paciente son INTEGER
       const existente = await baseDatos.query(
-        `SELECT 1 FROM usuarios_por_psicologo WHERE psicologo::TEXT = $1::TEXT AND paciente::TEXT = $2::TEXT`,
-        [psicologoId.toString(), pacienteId.toString()]
+        `SELECT 1 FROM usuarios_por_psicologo WHERE psicologo = $1 AND paciente = $2`,
+        [psicologoId, pacienteId]
       );
       
       if (existente.rows.length > 0) {
@@ -1129,12 +1129,12 @@ app.delete('/api/recordatorios/:id', async (req, res) => {
       }
 
       // Insertar relación
-      // Las columnas psicologo y paciente son VARCHAR, convertir a texto
+      // Las columnas psicologo y paciente son INTEGER
       const resultado = await baseDatos.query(
         `INSERT INTO usuarios_por_psicologo (psicologo, paciente)
          VALUES ($1, $2)
          RETURNING *`,
-        [psicologoId.toString(), pacienteId.toString()]
+        [psicologoId, pacienteId]
       );
 
        res.status(201).json({
