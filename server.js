@@ -352,16 +352,25 @@ app.post('/api/psicologos', async (req, res) => {
 app.post('/api/estados-animo', async (req, res) => {
   console.log('Body:', req.body);
   console.log('Body completo:', req.body);
-  const { id_usuario, estado,comentario } = req.body;
+  const { id_usuario, estado, comentario } = req.body;
   
   try {
+    // Obtener fecha y hora actuales
+    const ahora = new Date();
+    const fechaCreacion = ahora.toISOString().split('T')[0]; // YYYY-MM-DD
+    const horaCreacion = ahora.toTimeString().split(' ')[0].substring(0, 5); // HH:mm
+    
+    console.log('Fecha creación:', fechaCreacion);
+    console.log('Hora creación:', horaCreacion);
+    
     const resultado = await baseDatos.query(`
-      INSERT INTO estados (id_usuario, estado, comentario,fecha_creacion) 
-      VALUES ($1, $2, $3,current_date) 
+      INSERT INTO estados (id_usuario, estado, comentario, fecha_creacion, hora_creacion) 
+      VALUES ($1, $2, $3, $4::DATE, $5::TIME) 
       RETURNING *
-    `, [id_usuario, estado,comentario]);
+    `, [id_usuario, estado, comentario, fechaCreacion, horaCreacion]);
     
     console.log('Estado de ánimo guardado:', resultado.rows[0].id);
+    console.log('Hora de creación guardada:', resultado.rows[0].hora_creacion);
     
     res.status(201).json({
       success: true,
@@ -370,11 +379,11 @@ app.post('/api/estados-animo', async (req, res) => {
     
   } catch (error) {
     console.log('Fallo');
-  console.error('Error al guardar estado de ánimo:', error); 
-  res.status(500).json({ 
-    error: 'Error al guardar',
-    detalle: error.message 
-  });
+    console.error('Error al guardar estado de ánimo:', error); 
+    res.status(500).json({ 
+      error: 'Error al guardar',
+      detalle: error.message 
+    });
   }
 });
 
@@ -396,6 +405,15 @@ app.get('/api/estados-animo/todos', async (req, res) => {
     
     if (psicologo_id) {
       // Si es psicólogo, solo obtener estados de sus pacientes
+      // Convertir psicologo_id a entero
+      const psicologoIdInt = parseInt(psicologo_id);
+      
+      if (isNaN(psicologoIdInt)) {
+        return res.status(400).json({ 
+          error: 'psicologo_id debe ser un número válido' 
+        });
+      }
+      
       query = `
         SELECT 
           e.id,
@@ -411,7 +429,7 @@ app.get('/api/estados-animo/todos', async (req, res) => {
           AND e.fecha_creacion >= $2
         ORDER BY e.fecha_creacion DESC
       `;
-      params = [psicologo_id, fechaInicio];
+      params = [psicologoIdInt, fechaInicio];
     } else {
       // Si no se especifica psicólogo, obtener todos (para admin)
       query = `
@@ -1154,11 +1172,21 @@ app.delete('/api/recordatorios/:id', async (req, res) => {
      const { psicologoId, pacienteId } = req.params;
 
      try {
+       // Convertir a enteros
+       const psicologoIdInt = parseInt(psicologoId);
+       const pacienteIdInt = parseInt(pacienteId);
+       
+       if (isNaN(psicologoIdInt) || isNaN(pacienteIdInt)) {
+         return res.status(400).json({ 
+           error: 'psicologoId y pacienteId deben ser números válidos' 
+         });
+       }
+       
        const resultado = await baseDatos.query(
          `DELETE FROM usuarios_por_psicologo
           WHERE psicologo = $1 AND paciente = $2
           RETURNING *`,
-         [psicologoId, pacienteId]
+         [psicologoIdInt, pacienteIdInt]
        );
 
        if (resultado.rows.length === 0) {
@@ -1225,6 +1253,15 @@ app.get('/api/psicologo/:psicologoId/pacientes', async (req, res) => {
   console.log(`Obteniendo pacientes del psicólogo ${psicologoId}`);
   
   try {
+    // Convertir a entero
+    const psicologoIdInt = parseInt(psicologoId);
+    
+    if (isNaN(psicologoIdInt)) {
+      return res.status(400).json({ 
+        error: 'psicologoId debe ser un número válido' 
+      });
+    }
+    
     const resultado = await baseDatos.query(`
       SELECT 
         u.id,
@@ -1238,7 +1275,7 @@ app.get('/api/psicologo/:psicologoId/pacientes', async (req, res) => {
       WHERE upp.psicologo = $1
       GROUP BY u.id, u.usuario
       ORDER BY u.usuario
-    `, [psicologoId]);
+    `, [psicologoIdInt]);
     
     console.log(`Encontrados ${resultado.rows.length} pacientes`);
     
